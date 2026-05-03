@@ -1,0 +1,140 @@
+package com.trip.travel.controller;
+
+import com.trip.travel.dto.WeatherDto; 
+import com.trip.travel.service.TourApiService;
+import com.trip.travel.service.WeatherService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
+@RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
+public class TravelController {
+
+    private final TourApiService tourApiService;
+    private final WeatherService weatherService;
+
+    // 관광지 목록
+    @GetMapping("/tour/spots")
+    public ResponseEntity<List<Map<String, Object>>> getTourSpots(
+            @RequestParam(defaultValue = "12") String contentTypeId,
+            @RequestParam(defaultValue = "1") int pageNo) {
+        return ResponseEntity.ok(tourApiService.getGangwonTourSpots(contentTypeId, pageNo));
+    }
+
+    // 축제 목록
+    @GetMapping("/tour/festivals")
+    public ResponseEntity<List<Map<String, Object>>> getFestivals() {
+        return ResponseEntity.ok(tourApiService.getGangwonFestivals());
+    }
+
+    // 관광지 검색
+    @GetMapping("/tour/search")
+    public ResponseEntity<List<Map<String, Object>>> searchSpots(
+            @RequestParam("keyword") String keyword) {  // ketword → keyword 수정!
+        return ResponseEntity.ok(tourApiService.searchTourSpots(keyword));
+    }
+
+    // 동해안 4개 도시 통합 정보
+    @GetMapping("/tour/east-coast")
+    public ResponseEntity<Map<String, Object>> getEastCoastInfo() {
+        log.info("=== /tour/east-coast 호출됨 ===");
+        
+        Map<String, Object> result = new LinkedHashMap<>();
+        String[] cities = {"삼척", "동해", "양양", "속초"};
+        
+        // 한 번만 조회
+        List<Map<String, Object>> allFestivals = tourApiService.getGangwonFestivals();
+        List<Map<String, Object>> allRestaurants = tourApiService.getGangwonTourSpots("39", 1);
+        List<Map<String, Object>> allHotels = tourApiService.getGangwonTourSpots("32", 1);
+        
+        log.info("전체 데이터 조회 완료 - 축제:{}건, 맛집:{}건, 숙박:{}건", 
+            allFestivals.size(), allRestaurants.size(), allHotels.size());
+        
+        for (String city : cities) {
+            Map<String, Object> cityData = new LinkedHashMap<>();
+            
+            // 1. 관광지 (도시별 검색)
+            List<Map<String, Object>> spots = tourApiService.searchTourSpots(city);
+            cityData.put("spots", spots.stream().limit(6).collect(java.util.stream.Collectors.toList()));
+            
+            // 2. 축제 (전체에서 필터링)
+            List<Map<String, Object>> cityFestivals = allFestivals.stream()
+                .filter(f -> {
+                    String addr = (String) f.get("addr1");
+                    return addr != null && addr.contains(city);
+                })
+                .collect(java.util.stream.Collectors.toList());
+            cityData.put("festivals", cityFestivals);
+            
+            // 3. 맛집 (전체에서 필터링)
+            List<Map<String, Object>> cityRestaurants = allRestaurants.stream()
+                .filter(r -> {
+                    String addr = (String) r.get("addr1");
+                    return addr != null && addr.contains(city);
+                })
+                .limit(6)
+                .collect(java.util.stream.Collectors.toList());
+            cityData.put("restaurants", cityRestaurants);  // restaurtants → restaurants 수정!
+            
+            // 4. 숙박 (전체에서 필터링)
+            List<Map<String, Object>> cityHotels = allHotels.stream()
+                .filter(h -> {
+                    String addr = (String) h.get("addr1");
+                    return addr != null && addr.contains(city);
+                })
+                .limit(6)
+                .collect(java.util.stream.Collectors.toList());
+            cityData.put("hotels", cityHotels);
+            
+            result.put(city, cityData);
+            
+            log.info("{} - 관광지:{}건, 축제:{}건, 맛집:{}건, 숙박:{}건", 
+                city, spots.size(), cityFestivals.size(), cityRestaurants.size(), cityHotels.size());
+        }
+        
+        log.info("=== 최종 결과 반환 ===");
+        return ResponseEntity.ok(result);
+    }
+
+    // 강원도 전체 날씨
+    @GetMapping("/weather/gangwon")
+    public ResponseEntity<List<WeatherDto>> getGangwonWeather() {
+        return ResponseEntity.ok(weatherService.getAllGangwonWeather());
+    }
+
+    // 특정 지역 날씨
+    @GetMapping("/weather")
+    public ResponseEntity<WeatherDto> getWeather(
+            @RequestParam("location") String location,
+            @RequestParam("nx") int nx,
+            @RequestParam("ny") int ny) {
+        return ResponseEntity.ok(weatherService.getWeatherByGrid(location, nx, ny));
+    }
+    
+    // 3일치 날씨 조회
+    @GetMapping("/weather/forecast")
+    public ResponseEntity<List<Map<String, String>>> get3DayForecast(
+            @RequestParam("location") String location,
+            @RequestParam("nx") int nx,
+            @RequestParam("ny") int ny) {
+        return ResponseEntity.ok(weatherService.get3DayForecast(location, nx, ny));
+    }
+
+    // 메인 대시보드 통합
+    @GetMapping("/dashboard")
+    public ResponseEntity<Map<String, Object>> getDashboard() {
+        Map<String, Object> dashboard = Map.of(
+            "weather", weatherService.getAllGangwonWeather(),
+            "festivals", tourApiService.getGangwonFestivals()
+        );
+        return ResponseEntity.ok(dashboard);
+    }
+}

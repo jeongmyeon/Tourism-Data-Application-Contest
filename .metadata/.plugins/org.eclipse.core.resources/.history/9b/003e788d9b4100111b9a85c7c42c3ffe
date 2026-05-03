@@ -1,0 +1,247 @@
+package com.trip.travel.service;
+
+import com.trip.travel.dto.WeatherDto;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class WeatherService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.weather.key}")
+    private String weatherApiKey;
+
+    @Value("${api.weather.base-url}")
+    private String baseUrl;
+
+    @Cacheable("gangwonWeather")
+    public List<WeatherDto> getAllGangwonWeather() {
+        List<WeatherDto> result = new ArrayList<>();
+        for (WeatherDto.GangwonGrid grid : WeatherDto.GangwonGrid.values()) {
+            try {
+                WeatherDto weather = getWeatherByGrid(grid.name, grid.nx, grid.ny);
+                result.add(weather);
+            } catch (Exception e) {
+                log.error("날씨 조회 실패 - {}: {}", grid.name, e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    public WeatherDto getWeatherByGrid(String location, int nx, int ny) {
+        LocalDateTime now = LocalDateTime.now();
+        String baseDate = now.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String baseTime = getBaseTime(now.getHour());
+
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/getVilageFcst")
+                .queryParam("serviceKey", weatherApiKey)
+                .queryParam("numOfRows", 500)
+                .queryParam("pageNo", 1)
+                .queryParam("dataType", "JSON")
+                .queryParam("base_date", baseDate)
+                .queryParam("base_time", baseTime)
+                .queryParam("nx", nx)
+                .queryParam("ny", ny)
+                .build(false)
+                .toUriString();
+
+        Map response = webClientBuilder.build()
+                .get()
+                .uri(url)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        return parseWeatherResponse(response, location, nx, ny);
+    }
+
+    @SuppressWarnings("unchecked")
+    private WeatherDto parseWeatherResponse(Map response, String location, int nx, int ny) {
+        Map<String, String> fcstMap = new HashMap<>();
+
+        try {
+            Map body = (Map) ((Map) response.get("response")).get("body");
+            Map items = (Map) body.get("items");
+            List<Map> itemList = (List<Map>) items.get("item");
+
+            String targetFcstTime = (String) itemList.get(0).get("fcstTime");
+            for (Map item : itemList) {
+                if (targetFcstTime.equals(item.get("fcstTime"))) {
+                    fcstMap.put((String) item.get("category"), (String) item.get("fcstValue"));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("날씨 파싱 실패 - {}: {}", location, e.getMessage());
+        }
+
+        String sky = fcstMap.getOrDefault("SKY", "1");
+        String pty = fcstMap.getOrDefault("PTY", "0");
+
+        return WeatherDto.builder()
+                .location(location)
+                .nx(nx)
+                .ny(ny)
+                .tmp(fcstMap.getOrDefault("TMP", "--"))
+                .sky(sky)
+                .pty(pty)
+                .pop(fcstMap.getOrDefault("POP", "0"))
+                .sno(fcstMap.getOrDefault("SNO", "0"))
+                .wsd(fcstMap.getOrDefault("WSD", "0"))
+                .skyText(getSkyText(sky))
+                .ptyText(getPtyText(pty))
+                .icon(getWeatherIcon(sky, pty))
+                .build();
+    }
+
+    private String getBaseTime(int hour) {
+        int[] baseTimes = {2, 5, 8, 11, 14, 17, 20, 23};
+        int selectedHour = baseTimes[0];
+        for (int bt : baseTimes) {
+            if (hour >= bt) selectedHour = bt;
+        }
+        return String.format("%02d00", selectedHour);
+    }
+
+    private String getSkyText(String sky) {
+        return switch (sky) {
+            case "1" -> "맑음";
+            case "3" -> "구름많음";
+            case "4" -> "흐림";
+            default -> "맑음";
+        };
+    }
+
+    private String getPtyText(String pty) {
+        return switch (pty) {
+            case "1" -> "비";
+            case "2" -> "비/눈";
+            case "3" -> "눈";
+            case "4" -> "소나기";
+            default -> "없음";
+        };
+    }
+
+    private String getWeatherIcon(String sky, String pty) {
+        if (!"0".equals(pty)) return "rain";
+        return switch (sky) {
+            case "1" -> "sunny";
+            case "3" -> "cloudy";
+            case "4" -> "overcast";
+            default -> "sunny";
+        };
+    }
+    // 3일치 예보
+    public List<Map<String, String>> get3DayForecast(String location, int nx, int ny) {
+        LocalDateTime now = LocalDateTime.now();
+        String baseDate = now.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String baseTime = getBaseTime(now.getHour());
+
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/getVilageFcst")
+                .queryParam("serviceKey", weatherApiKey)
+                .queryParam("numOfRows", 300)  // 3일치 데이터
+                .queryParam("pageNo", 1)
+                .queryParam("dataType", "JSON")
+                .queryParam("base_date", baseDate)
+                .queryParam("base_time", baseTime)
+                .queryParam("nx", nx)
+                .queryParam("ny", ny)
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            return parse3DayForecast(response);
+            
+        } catch (Exception e) {
+            log.error("3일 예보 조회 실패 - {}: {}", location, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, String>> parse3DayForecast(Map response) {
+        List<Map<String, String>> result = new ArrayList<>();
+        
+        try {
+            Map body = (Map) ((Map) response.get("response")).get("body");
+            Map items = (Map) body.get("items");
+            List<Map> itemList = (List<Map>) items.get("item");
+
+            // 날짜별로 그룹화 (모든 시간대 중 가장 높은/낮은 온도 추출)
+            Map<String, Map<String, Object>> dailyData = new LinkedHashMap<>();
+            
+            for (Map item : itemList) {
+                String fcstDate = (String) item.get("fcstDate");
+                String category = (String) item.get("category");
+                String value = (String) item.get("fcstValue");
+                
+                dailyData.putIfAbsent(fcstDate, new LinkedHashMap<>());
+                Map<String, Object> dayData = dailyData.get(fcstDate);
+                
+                dayData.put("date", fcstDate);
+                
+                // 각 카테고리별 값 저장 (대표값)
+                if ("TMP".equals(category)) {
+                    if (!dayData.containsKey("TMP")) {
+                        dayData.put("TMP", value);
+                    }
+                } else if ("SKY".equals(category)) {
+                    if (!dayData.containsKey("SKY")) {
+                        dayData.put("SKY", value);
+                    }
+                } else if ("PTY".equals(category)) {
+                    if (!dayData.containsKey("PTY")) {
+                        dayData.put("PTY", value);
+                    }
+                } else if ("POP".equals(category)) {
+                    if (!dayData.containsKey("POP")) {
+                        dayData.put("POP", value);
+                    }
+                }
+            }
+            
+            // 최대 3일치만 변환
+            dailyData.values().stream()
+                    .limit(3)
+                    .forEach(dayData -> {
+                        String sky = (String) dayData.getOrDefault("SKY", "1");
+                        String pty = (String) dayData.getOrDefault("PTY", "0");
+                        
+                        Map<String, String> forecast = new LinkedHashMap<>();
+                        forecast.put("date", (String) dayData.get("date"));
+                        forecast.put("tmp", (String) dayData.getOrDefault("TMP", "--"));
+                        forecast.put("sky", sky);
+                        forecast.put("pty", pty);
+                        forecast.put("pop", (String) dayData.getOrDefault("POP", "0"));
+                        forecast.put("skyText", getSkyText(sky));
+                        forecast.put("ptyText", getPtyText(pty));
+                        forecast.put("icon", getWeatherIcon(sky, pty));
+                        
+                        result.add(forecast);
+                    });
+            
+        } catch (Exception e) {
+            log.warn("3일 예보 파싱 실패: {}", e.getMessage());
+        }
+        
+        return result;
+    }
+}

@@ -1,0 +1,39 @@
+package com.trip.travel.dto;
+
+import lombok.Builder;
+import lombok.Data;
+
+@Data
+@Builder
+public class WeatherDto {
+    private String location;
+    private int nx;
+    private int ny;
+    private String tmp;
+    private String sky;
+    private String pty;
+    private String pop;
+    private String sno;
+    private String wsd;
+    private String skyText;
+    private String ptyText;
+    private String icon;
+
+    public enum GangwonGrid {
+        SOKCHO("속초", 87, 141),
+        YANGYANG("양양", 88, 138),
+        GANGNEUNG("강릉",92, 131),
+        SAMCHEOK("삼척", 98,127),
+        DONFHAE("동해", 97,127);
+        
+        public final String name;
+        public final int nx;
+        public final int ny;
+
+        GangwonGrid(String name, int nx, int ny) {
+            this.name = name;
+            this.nx = nx;
+            this.ny = ny;
+        }
+    }
+}

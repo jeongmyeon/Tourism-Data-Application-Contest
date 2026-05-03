@@ -1,0 +1,97 @@
+package com.trip.travel.service;
+
+import lombok.RequiredArgsConstructor; 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ParkingService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.parking.key}")
+    private String parkingApiKey;
+
+    @Value("${api.parking.base-url}")
+    private String baseUrl;
+
+    private static final String GANGNEUNG_CITY_CODE = "42150";
+    private static final String SOKCHO_CITY_CODE = "42230";
+
+    @Cacheable(value = "parkingInfo", key = "#cityCode")
+    public List<Map<String, Object>> getParkingByCity(String cityCode) {
+        String url = UriComponentsBuilder.fromHttpUriString(baseUrl + "/getParkingInfo")
+                .queryParam("serviceKey", parkingApiKey)
+                .queryParam("numOfRows", 30)
+                .queryParam("pageNo", 1)
+                .queryParam("cityCode", cityCode)
+                .queryParam("type", "json")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            return extractParkingItems(response);
+        } catch (Exception e) {
+            log.error("주차 API 호출 실패 - cityCode {}: {}", cityCode, e.getMessage());
+            return getMockParkingData(cityCode);
+        }
+    }
+
+    public Map<String, List<Map<String, Object>>> getAllGangwonParking() {
+        Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
+        result.put("강릉", getParkingByCity(GANGNEUNG_CITY_CODE));
+        result.put("속초", getParkingByCity(SOKCHO_CITY_CODE));
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractParkingItems(Map response) {
+        try {
+            Map body = (Map) ((Map) response.get("response")).get("body");
+            Map items = (Map) body.get("items");
+            Object item = items.get("item");
+            if (item instanceof List) return (List<Map<String, Object>>) item;
+            if (item instanceof Map) return List.of((Map<String, Object>) item);
+        } catch (Exception e) {
+            log.warn("주차 응답 파싱 실패: {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+
+    private List<Map<String, Object>> getMockParkingData(String cityCode) {
+        List<Map<String, Object>> mock = new ArrayList<>();
+        String city = GANGNEUNG_CITY_CODE.equals(cityCode) ? "강릉" : "속초";
+        String[][] spots = {
+            {city + " 경포대 주차장", "300", "87", "37.79", "128.90"},
+            {city + " 중앙시장 주차장", "150", "42", "37.75", "128.87"},
+            {city + " 해수욕장 주차장", "500", "213", "37.80", "128.92"},
+        };
+        for (String[] s : spots) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("parkingName", s[0]);
+            m.put("totalQty", s[1]);
+            m.put("remainQty", s[2]);
+            m.put("lat", Double.parseDouble(s[3]));
+            m.put("lng", Double.parseDouble(s[4]));
+            m.put("payYn", "Y");
+            m.put("basicCharge", "1000");
+            mock.add(m);
+        }
+        return mock;
+    }
+}

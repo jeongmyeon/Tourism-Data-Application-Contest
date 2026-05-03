@@ -1,0 +1,225 @@
+package com.trip.travel.service;
+
+import lombok.RequiredArgsConstructor; 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class TourApiService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.tour.key}")
+    private String tourApiKey;
+
+    @Value("${api.tour.base-url}")
+    private String baseUrl;
+
+    private static final String GANGWON_AREA_CODE = "32";
+
+    // 관광지/맛집/숙박 조회 - 하나만!
+    @Cacheable(value = "tourSpots", key = "#contentTypeId + '_' + #pageNo")
+    public List<Map<String, Object>> getGangwonTourSpots(String contentTypeId, int pageNo) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/areaBasedList2")
+                .queryParam("serviceKey", tourApiKey)
+                .queryParam("numOfRows", 200)
+                .queryParam("pageNo", pageNo)
+                .queryParam("MobileOS", "ETC")
+                .queryParam("MobileApp", "GangwonTravel")
+                .queryParam("contentTypeId", contentTypeId)
+                .queryParam("areaCode",GANGWON_AREA_CODE)
+                .queryParam("_type", "json")
+                .build(false)
+                .toUriString();
+        
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+            
+            List<Map<String, Object>> allItems = extractItems(response);
+            
+            // 강원도만 필터링
+            List<Map<String, Object>> gangwonItems = allItems.stream()
+                    .filter(item -> {
+                        String addr = (String) item.get("addr1");
+                        return addr != null && (addr.startsWith("강원특별자치도") || addr.startsWith("강원도"));
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            
+            log.info("ContentType {} - 전체 {}건, 강원도 {}건", contentTypeId, allItems.size(), gangwonItems.size());
+            
+            return gangwonItems;
+            
+        } catch (Exception e) {
+            log.error("TourAPI 조회 실패 (contentTypeId: {}): {}", contentTypeId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // 축제 조회
+    @Cacheable(value = "tourFestivals", key = "'all'")
+    public List<Map<String, Object>> getGangwonFestivals() {
+        LocalDateTime now = LocalDateTime.now();
+        String today = now.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/searchFestival2")
+                .queryParam("serviceKey", tourApiKey)
+                .queryParam("numOfRows", 200)
+                .queryParam("pageNo", 1)
+                .queryParam("MobileOS", "ETC")
+                .queryParam("MobileApp", "GangwonTravel")
+                .queryParam("eventStartDate", today)
+                .queryParam("_type", "json")
+                .build(false)
+                .toUriString();
+        
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+            
+            List<Map<String, Object>> allItems = extractItems(response);
+            log.info("전체 축제 {}건", allItems.size());
+            
+            List<Map<String, Object>> gangwonFestivals = allItems.stream()
+                    .filter(item -> {
+                        String addr = (String) item.get("addr1");
+                        if (addr == null) return false;
+                        return addr.startsWith("강원특별자치도") || addr.startsWith("강원도");
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+            
+            log.info("강원도 축제 필터링 후 {}건", gangwonFestivals.size());
+            
+            return gangwonFestivals;
+            
+        } catch (Exception e) {
+            log.error("TourAPI 축제 조회 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    // 축제 상세 정보 조회
+    public Map<String, Object> getFestivalDetail(String contentId){
+    	Map<String, Object> result = new LinkedHashMap<>();
+    	// 1. 기본 정보
+    	String commonUrl = UriComponentsBuilder.fromUriString(baseUrl + "/detailCommon2")
+    			.queryParam("serviceKey", tourApiKey)
+                .queryParam("contentId", contentId)
+                .queryParam("MobileOS", "ETC")
+                .queryParam("MobileApp", "GangwonTravel")
+                .queryParam("_type", "json")
+                .build(false)
+                .toUriString();
+    	
+    	 try {
+    	        Map commonResponse = webClientBuilder.build()
+    	                .get()
+    	                .uri(commonUrl)
+    	                .retrieve()
+    	                .bodyToMono(Map.class)
+    	                .block();
+
+    	        List<Map<String, Object>> commonItems = extractItems(commonResponse);
+    	        if(!commonItems.isEmpty()) {
+    	        	result = commonItems.get(0);
+    	        	log.info("축제 조회 성공", contentId);
+    	        }
+    	        
+    	    } catch (Exception e) {
+    	        log.error("축제 상세 조회 실패 (contentId: {}): {}", contentId, e.getMessage());
+    	        return Collections.emptyMap();
+    	    }
+    	 
+    	 // 2. 상세 정보
+    	 String introUrl = UriComponentsBuilder.fromUriString(baseUrl + "/detailIntro02")
+    			 .queryParam("serviceKey", tourApiKey)
+    			 .queryParam("contentId", contentId)
+    			 .queryParam("contentTypeId", "15")
+    			 .queryParam("MobileOS", "ETC")
+    			 .queryParam("MobileApp", "GangwonTravel")
+    			 .queryParam("_type", "json")
+    			 .build(false)
+    			 .toUriString();
+    	 
+    	 try {
+    		 Map introResponse = webClientBuilder.build()
+    				 .get()
+    				 .uri(introUrl)
+    				 .retrieve()
+    				 .bodyToMono(Map.class)
+    				 .block();
+    		 List<Map<String, Object>> introItems = extractItems(introResponse);
+    		 if(!introItems.isEmpty()) {
+    			 Map<String, Object> intro = introItems.get(0);
+    			 result.putAll(intro);
+    			 log.info("조회 성공 - 주차 : {}, 시간 : {}", intro.get("parking"),intro.get("usetimefestival"));
+    		 }
+    	 }catch(Exception e) {
+    		 log.error("축제 상세 조회 실패", contentId, e.getMessage());
+    	 }
+    	 return result;
+    }
+    
+    
+    // 키워드 검색
+    public List<Map<String, Object>> searchTourSpots(String keyword) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/searchKeyword2")
+                .queryParam("serviceKey", tourApiKey)
+                .queryParam("numOfRows", 10)
+                .queryParam("pageNo", 1)
+                .queryParam("MobileOS", "ETC")
+                .queryParam("MobileApp", "GangwonTravel")
+                .queryParam("_type", "json")
+                .queryParam("keyword", keyword)
+                .queryParam("areaCode", GANGWON_AREA_CODE)
+                .queryParam("contentTypeId","12")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            return extractItems(response);
+        } catch (Exception e) {
+            log.error("TourAPI 검색 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractItems(Map response) {
+        try {
+            Map body = (Map) response.get("response");
+            Map bodyInner = (Map) body.get("body");
+            Map items = (Map) bodyInner.get("items");
+            Object item = items.get("item");
+            if (item instanceof List) return (List<Map<String, Object>>) item;
+            if (item instanceof Map) return List.of((Map<String, Object>) item);
+        } catch (Exception e) {
+            log.warn("TourAPI 응답 파싱 실패: {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+}

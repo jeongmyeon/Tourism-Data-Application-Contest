@@ -1,0 +1,299 @@
+package com.trip.travel.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ParkingService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.parking.key}")
+    private String parkingApiKey;
+
+    @Value("${api.parking.base-url}")
+    private String baseUrl;
+
+    private static final String CHUNCHEON_CITY_CODE = "42110";
+    private static final String GANGNEUNG_CITY_CODE = "42150";
+    private static final String SOKCHO_CITY_CODE = "42230";
+    private static final String WONJU_CITY_CODE = "42130";
+    private static final String DONGHAE_CITY_CODE = "42170";
+    private static final String TAEBAEK_CITY_CODE = "42190";
+    private static final String SAMCHEOK_CITY_CODE = "42210";
+    private static final String PYEONGCHANG_CITY_CODE = "42750";
+
+    @Cacheable(value = "parkingInfo", key = "#cityCode")
+    public List<Map<String, Object>> getParkingByCity(String cityCode) {
+        try {
+            // 1단계: 주차장 기본 정보 가져오기
+            List<Map<String, Object>> parkingLots = getParkingSttusInfo(cityCode);
+            
+            if (parkingLots.isEmpty()) {
+                log.warn("주차장 기본 정보 없음 - cityCode: {}", cityCode);
+                return getMockParkingData(cityCode);
+            }
+            
+            // 2단계: 실시간 정보 가져오기
+            Map<String, Map<String, Object>> realtimeMap = getParkingRealtimeInfo(cityCode);
+            
+            // 3단계: 운영 정보 가져오기
+            Map<String, Map<String, Object>> operMap = getParkingOperInfo(cityCode);
+            
+            // 4단계: 데이터 병합
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Map<String, Object> lot : parkingLots) {
+                String centerId = (String) lot.get("prk_center_id");
+                
+                Map<String, Object> merged = new LinkedHashMap<>();
+                merged.put("parkingName", lot.get("prk_plce_nm"));
+                merged.put("addr", lot.get("prk_plce_adres"));
+                merged.put("lat", lot.get("prk_plce_entrc_la"));
+                merged.put("lng", lot.get("prk_plce_entrc_lo"));
+                
+                // 실시간 정보 병합
+                Map<String, Object> realtime = realtimeMap.get(centerId);
+                if (realtime != null) {
+                    merged.put("totalQty", realtime.get("pkfc_ParkingLots_total"));
+                    merged.put("remainQty", realtime.get("pkfc_Available_ParkingLots_total"));
+                } else {
+                    merged.put("totalQty", lot.get("prk_cmprt_co"));
+                    merged.put("remainQty", "0");
+                }
+                
+                // 운영 정보 병합
+                Map<String, Object> oper = operMap.get(centerId);
+                if (oper != null) {
+                    merged.put("payYn", getPayYn(oper));
+                    merged.put("basicCharge", getBasicCharge(oper));
+                    merged.put("operTm", getOperTime(oper));
+                } else {
+                    merged.put("payYn", "Y");
+                    merged.put("basicCharge", "미확인");
+                    merged.put("operTm", "미확인");
+                }
+                
+                result.add(merged);
+            }
+            
+            return result.isEmpty() ? getMockParkingData(cityCode) : result;
+            
+        } catch (Exception e) {
+            log.error("주차장 정보 조회 실패 - cityCode {}: {}", cityCode, e.getMessage());
+            return getMockParkingData(cityCode);
+        }
+    }
+
+    // 주차장 기본 정보
+    private List<Map<String, Object>> getParkingSttusInfo(String cityCode) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/PrkSttusInfo")
+                .queryParam("serviceKey", parkingApiKey)
+                .queryParam("numOfRows", 50)
+                .queryParam("pageNo", 1)
+                .queryParam("type", "json")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> items = extractItems(response);
+            
+            // 강원도 지역만 필터링 (주소에 해당 도시명 포함)
+            String cityName = getCityName(cityCode);
+            return items.stream()
+                    .filter(item -> {
+                        String addr = (String) item.get("prk_plce_adres");
+                        return addr != null && addr.contains(cityName);
+                    })
+                    .limit(30)
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            log.error("PrkSttusInfo 호출 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // 실시간 정보
+    private Map<String, Map<String, Object>> getParkingRealtimeInfo(String cityCode) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/PrkRealtimeInfo")
+                .queryParam("serviceKey", parkingApiKey)
+                .queryParam("numOfRows", 50)
+                .queryParam("pageNo", 1)
+                .queryParam("type", "json")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> items = extractItems(response);
+            
+            // prk_center_id를 키로 하는 Map 생성
+            return items.stream()
+                    .collect(Collectors.toMap(
+                            item -> (String) item.get("prk_center_id"),
+                            item -> item,
+                            (a, b) -> a
+                    ));
+                    
+        } catch (Exception e) {
+            log.error("PrkRealtimeInfo 호출 실패: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    // 운영 정보
+    private Map<String, Map<String, Object>> getParkingOperInfo(String cityCode) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/PrkOprInfo")
+                .queryParam("serviceKey", parkingApiKey)
+                .queryParam("numOfRows", 50)
+                .queryParam("pageNo", 1)
+                .queryParam("type", "json")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> items = extractItems(response);
+            
+            return items.stream()
+                    .collect(Collectors.toMap(
+                            item -> (String) item.get("prk_center_id"),
+                            item -> item,
+                            (a, b) -> a
+                    ));
+                    
+        } catch (Exception e) {
+            log.error("PrkOprInfo 호출 실패: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    public Map<String, List<Map<String, Object>>> getAllGangwonParking() {
+        Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
+        result.put("춘천", getParkingByCity(CHUNCHEON_CITY_CODE));
+        result.put("강릉", getParkingByCity(GANGNEUNG_CITY_CODE));
+        result.put("속초", getParkingByCity(SOKCHO_CITY_CODE));
+        result.put("원주", getParkingByCity(WONJU_CITY_CODE));
+        result.put("동해", getParkingByCity(DONGHAE_CITY_CODE));
+        result.put("태백", getParkingByCity(TAEBAEK_CITY_CODE));
+        result.put("삼척", getParkingByCity(SAMCHEOK_CITY_CODE));
+        result.put("평창", getParkingByCity(PYEONGCHANG_CITY_CODE));
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractItems(Map response) {
+        try {
+            Map body = (Map) ((Map) response.get("response")).get("body");
+            Map items = (Map) body.get("items");
+            Object item = items.get("item");
+            if (item instanceof List) return (List<Map<String, Object>>) item;
+            if (item instanceof Map) return List.of((Map<String, Object>) item);
+        } catch (Exception e) {
+            log.warn("응답 파싱 실패: {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+
+    private String getPayYn(Map<String, Object> oper) {
+        try {
+            Map basicInfo = (Map) oper.get("basic_info");
+            if (basicInfo != null) {
+                String charge = (String) basicInfo.get("parking_chrge_bs_chrg");
+                return (charge != null && !charge.equals("0")) ? "Y" : "N";
+            }
+        } catch (Exception e) {}
+        return "Y";
+    }
+
+    private String getBasicCharge(Map<String, Object> oper) {
+        try {
+            Map basicInfo = (Map) oper.get("basic_info");
+            if (basicInfo != null) {
+                return (String) basicInfo.get("parking_chrge_bs_chrg");
+            }
+        } catch (Exception e) {}
+        return "미확인";
+    }
+
+    private String getOperTime(Map<String, Object> oper) {
+        try {
+            Map monday = (Map) oper.get("Monday");
+            if (monday != null) {
+                String start = (String) monday.get("opertn_start_time");
+                String end = (String) monday.get("opertn_end_time");
+                if (start != null && end != null) {
+                    return start + " ~ " + end;
+                }
+            }
+        } catch (Exception e) {}
+        return "24시간";
+    }
+
+    private List<Map<String, Object>> getMockParkingData(String cityCode) {
+        List<Map<String, Object>> mock = new ArrayList<>();
+        String city = getCityName(cityCode);
+        
+        String[][] spots = {
+            {city + " 공영주차장", "300", "87"},
+            {city + " 중앙시장 주차장", "150", "42"},
+            {city + " 관광지 주차장", "500", "213"},
+        };
+        
+        for (String[] s : spots) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("parkingName", s[0]);
+            m.put("totalQty", s[1]);
+            m.put("remainQty", s[2]);
+            m.put("addr", city + "시");
+            m.put("payYn", "Y");
+            m.put("basicCharge", "1000");
+            m.put("operTm", "24시간");
+            mock.add(m);
+        }
+        return mock;
+    }
+    
+    private String getCityName(String cityCode) {
+        return switch (cityCode) {
+            case CHUNCHEON_CITY_CODE -> "춘천";
+            case GANGNEUNG_CITY_CODE -> "강릉";
+            case SOKCHO_CITY_CODE -> "속초";
+            case WONJU_CITY_CODE -> "원주";
+            case DONGHAE_CITY_CODE -> "동해";
+            case TAEBAEK_CITY_CODE -> "태백";
+            case SAMCHEOK_CITY_CODE -> "삼척";
+            case PYEONGCHANG_CITY_CODE -> "평창";
+            default -> "강원";
+        };
+    }
+}

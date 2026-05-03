@@ -1,0 +1,317 @@
+package com.trip.travel.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RestAreaService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.restarea.key}")
+    private String restAreaApiKey;
+    
+    @Value("${api.restarea.base-url}")
+    private String baseUrl;
+
+
+    /* 동해고속도로 휴게소 전체 정보 조회 */
+   // @Cacheable(value = "restAreas", key = "'donghae'")
+    public List<Map<String, Object>> getDonghaeRestAreas() {
+        // 1. 기본정보 조회
+        List<Map<String, Object>> basicInfo = getBasicRestAreaInfo();
+        
+        // 2. 좌표
+        List<Map<String, Object>> coordinates = getRestAreaCoordinates();
+        
+        // 4. 편의시설 조회
+        List<Map<String, Object>> facilities = getFacilitiesForRestAreaFacilities();
+        
+        // 4. 두 데이터 병합
+        return mergeAndClassify(basicInfo, coordinates, facilities);
+    }
+
+    /* 기본정보 API 호출 */
+    private List<Map<String, Object>> getBasicRestAreaInfo() {
+        String url = UriComponentsBuilder
+                .fromUriString(baseUrl+"/restinfo/hiwaySvarInfoList")
+                .queryParam("key", restAreaApiKey)
+                .queryParam("type", "json")
+                .queryParam("routeCd", "0650")
+                .queryParam("numOfRows", 50)
+                .queryParam("pageNo", 1)
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> list = extractList(response);
+            log.info("동해고속도로 휴게소 조회 - 전체: {}건", list.size());
+
+            // 상세 로그
+            list.forEach(item -> {
+                log.info("휴게소: {} , 방향: {}", 
+                    item.get("svarNm"), item.get("gudClssNm"));
+            });
+            
+            return list;
+
+        } catch (Exception e) {
+            log.error("기본정보 API 조회 실패: {}", e.getMessage());
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
+    }
+    
+    /* 좌표 */
+    private List<Map<String, Object>> getRestAreaCoordinates(){
+    	String url = UriComponentsBuilder
+    			.fromUriString(baseUrl + "/locationinfo/locationinfoRest")
+    			.queryParam("key", restAreaApiKey)
+    			.queryParam("type", "json")
+    			.queryParam("routeNo","0650")
+    			.queryParam("numOfRows",100)
+    			.queryParam("pageNo",1)
+    			.build(false)
+    			.toUriString();
+    	try {
+    		log.info("좌표호출");
+    		Map response = webClientBuilder.build()
+    				.get()
+    				.uri(url)
+    				.retrieve()
+    				.bodyToMono(Map.class)
+    				.block();
+    		
+    		List<Map<String, Object>> list = extractList(response);
+    		log.info("좌표 정보 : {}건",list.size());
+    		
+    		return list;
+    		
+    	}catch(Exception e) {
+    		log.error("API 실패 : {}",e.getMessage());
+    		return Collections.emptyList();
+    	}
+    }
+
+    /* 편의시설 API 호출 */
+    private List<Map<String, Object>> getFacilitiesForRestAreaFacilities() {
+        String url = UriComponentsBuilder
+        		.fromUriString(baseUrl + "/business/serviceAreaRoute")
+        		.queryParam("key",restAreaApiKey)
+        		.queryParam("type","json")
+        		.queryParam("numOfRows",100)
+        		.queryParam("pageNo",1)
+        		.build(false)
+        		.toUriString();
+
+        try {
+        	log.info("편의시설 API 호풀");
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> list = extractList(response);
+            log.info("편의시설 조회 : {}건",list.size());
+            return list;
+            
+
+        } catch (Exception e) {
+            log.error("편의시설 API 조회 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /* API 데이터 병합 */
+    private List<Map<String, Object>> mergeAndClassify(
+            List<Map<String, Object>> basicInfo,
+            List<Map<String, Object>> coordinates,
+            List<Map<String, Object>> facilities) {
+    	
+    	final double GANGWON_LAT_MIN = 37.0;
+        final double GANGWON_LAT_MAX = 38.6;
+        
+        return basicInfo.stream()
+        		.map(basic -> {
+            Map<String, Object> merged = new LinkedHashMap<>(basic);
+
+            String bsopAdtnlFcltCd = String.valueOf(basic.get("bsopAdtnlFcltCd"));
+            String svarNm = String.valueOf(basic.get("svarNm"));
+            String gudClssNm = String.valueOf(basic.get("gudClssNm"));
+            
+            String direction = gudClssNm.contains("상행") || gudClssNm.contains("부산") ? "상행" : "하행";
+            merged.put("direction", direction);
+            merged.put("name", svarNm);
+            
+            coordinates.stream()
+            	.filter(coord -> {
+            		String serviceAreaCode = String.valueOf(coord.get("serviceAreaCode"));
+            		boolean match = bsopAdtnlFcltCd.equals(serviceAreaCode);
+            		
+            		if(match) {
+            			log.info("매칭 성공 : {} ({})",svarNm,bsopAdtnlFcltCd);
+            		}
+            		return match;
+            	})
+            	.findFirst()
+            	.ifPresent(coord ->{
+            		merged.put("coordY", coord.get("yValue"));
+            		merged.put("coordX", coord.get("xValue"));
+            	});
+            
+            facilities.stream()
+            	.filter(fac -> svarNm.equals(String.valueOf(fac.get("serviceArteaName"))))
+            	.findFirst()
+            	.ifPresent(fac -> {
+            		List<String> facilityList = new ArrayList<>();
+            		String convenience =String.valueOf(fac.get("convenience"));
+            		if(convenience != null && !convenience.equals("null")) {
+            			String[] items = convenience.split(",");
+            			for(String item : items) {
+            				if(!item.trim().isEmpty()) {
+            					facilityList.add(item.trim());
+            				}
+            			}
+            		}
+            		merged.put("facilities", facilityList.isEmpty() ? 
+            				Arrays.asList("화장실","주차장"): facilityList);
+            		merged.put("tel",fac.get("telNo"));
+            	});
+            
+            if(!merged.containsKey("facilities")) {
+            	merged.put("facilities",Arrays.asList("화장실","주차장"));
+            }
+            
+            return merged;
+        	})
+        	.filter(merged ->{
+        		Object coordY = merged.get("coordY");
+        		if(coordY == null) {
+        			log.warn("좌표 X : {}", merged.get("name"));
+        			return false;
+        		}
+        		try {
+        			double lat = Double.parseDouble(String.valueOf(coordY));
+        			boolean isGangwon = lat >= GANGWON_LAT_MIN && lat <= GANGWON_LAT_MAX;
+        			
+//        			if(!isGangwon) {
+//        				log.info("강원도 외 지역 제외 :{}(위도:{})",merged.get("name"),lat);
+//        			}
+        			return isGangwon;
+        		}catch(Exception e) {
+        			log.warn("좌표 실패: {}", merged.get("name"));
+        			return false;
+        		}
+        	})
+        	.map(merged -> {
+        		Object coordY = merged.get("coordY");
+        		String direction = String.valueOf(merged.get("direction"));
+        		String name = String.valueOf(merged.get("name"));
+        		
+        		double lat = Double.parseDouble(String.valueOf(coordY));
+        		
+        		Map<String, String> routeInfo = classigfyByCoordinate(lat,direction,name);
+        		merged.putAll(routeInfo);
+        		
+        		log.info("분류 완료: {} {}, 위도: {}) - {} -> {}",name,direction,lat,routeInfo.get("fromCity"),routeInfo.get("toCity"));
+        		return merged;
+        	}).collect(Collectors.toList());
+        
+    }
+
+    /* 휴게소 이름과 방향으로 구간 정보 추정 */
+    private Map<String, String> classigfyByCoordinate(double lat, String direction, String name) {
+        Map<String, String> info = new HashMap<>();
+        
+     // 도시 좌표 기준점
+        List<Map.Entry<String, Double>> cities = List.of(
+                Map.entry("삼척", 37.45),
+                Map.entry("동해", 37.65),
+                Map.entry("양양", 38.07),
+                Map.entry("속초", 38.18)
+            );
+     // 현위치
+        int segmentIndex = -1;
+        for (int i = 0; i < cities.size() - 1; i++) {
+            double midpoint = (cities.get(i).getValue() + cities.get(i + 1).getValue()) / 2;
+            if (lat < midpoint) {
+                segmentIndex = i;
+                break;
+            }
+        }
+        
+     // 마지막 위치
+        if (segmentIndex == -1) {
+            segmentIndex = cities.size() - 2;
+        }
+        
+        String segmentStart = cities.get(segmentIndex).getKey();
+        String segmentEnd = cities.get(segmentIndex + 1).getKey();
+        
+     // 방향 설정
+        if ("상행".equals(direction)) {
+            info.put("fromCity", segmentStart);
+            info.put("toCity", segmentEnd);
+        } else {
+            info.put("fromCity", segmentEnd);
+            info.put("toCity", segmentStart);
+        }
+        
+     // 거리계산
+        double latDiff = Math.abs(cities.get(segmentIndex + 1).getValue() - cities.get(segmentIndex).getValue());
+        int estimatedMinutes = (int) Math.round(latDiff * 30); // 위도 0.1 ≈ 11km, 시속 100km
+        info.put("timeMinutes", String.valueOf(Math.max(10, estimatedMinutes)));
+        
+        log.info("🎯 자동분류: {} ({}, 위도 {:.2f}) - {} → {} ({}분)", 
+            name, direction, lat,
+            info.get("fromCity"), 
+            info.get("toCity"), 
+            info.get("timeMinutes"));
+        
+        
+        return info;
+        
+    }
+    
+    /* 구간별 휴게소 조회 */
+    public List<Map<String, Object>> getRestAreasByRoute(String fromCity, String toCity, String direction) {
+    	return getDonghaeRestAreas().stream()
+                .filter(area -> 
+                    fromCity.equals(area.get("fromCity")) &&
+                    toCity.equals(area.get("toCity")) &&
+                    direction.equals(area.get("direction"))
+                )
+                .collect(Collectors.toList());
+    }
+
+    /* API 응답 파싱 */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractList(Map response) {
+        try {
+            List<Map<String, Object>> list = (List<Map<String, Object>>) response.get("list");
+            return list != null ? list : Collections.emptyList();
+        } catch (Exception e) {
+            log.warn("응답 파싱 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+}

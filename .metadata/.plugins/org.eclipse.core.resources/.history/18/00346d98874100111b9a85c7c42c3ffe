@@ -1,0 +1,18 @@
+spring.application.name=travel
+server.port=8080
+
+# TourAPI
+api.tour.key=OoEvFDUJuFxlfXCvZhWXBY7WIk8pR1GY4wuBKx/ImFAq3YoRNVQEALqT0FBbpQJ3F5YLmPW0FLgQ7ipnv8UyWA==
+api.tour.base-url=https://apis.data.go.kr/B551011/KorService2
+
+# 기상청 날씨 
+api.weather.key=OoEvFDUJuFxlfXCvZhWXBY7WIk8pR1GY4wuBKx/ImFAq3YoRNVQEALqT0FBbpQJ3F5YLmPW0FLgQ7ipnv8UyWA==
+api.weather.base-url=https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+
+# 주차 정보
+api.parking.key=key
+api.parking.base-url=https://apis.data.go.kr/B552154/parkingMgmtService
+
+# 캐시설정
+spring.cache.type=caffeine
+spring.cache.caffeine.spec=maximumSize=500,expireAfterWrite=60s

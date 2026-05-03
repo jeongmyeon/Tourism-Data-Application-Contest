@@ -1,0 +1,171 @@
+package com.trip.travel.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RestAreaService {
+
+    private final WebClient.Builder webClientBuilder;
+
+    @Value("${api.restarea.key}")
+    private String restAreaApiKey;
+
+    @Value("${api.restarea.base-url}")
+    private String baseUrl;
+
+    /* 전국 휴게소 정보 조회 후 동해고속도로만 필터링 */
+    @Cacheable(value = "restAreas", key = "'donghae'")
+    public List<Map<String, Object>> getDonghaeRestAreas() {
+        String url = UriComponentsBuilder
+                .fromUriString(baseUrl + "/hiwaySvarInfoList")
+                .queryParam("key", restAreaApiKey)
+                .queryParam("type", "json")
+                .queryParam("numOfRows", 500)
+                .queryParam("pageNo", 1)
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            List<Map<String, Object>> allRestAreas = extractRestAreas(response);
+            log.info("전체 휴게소 조회: {}건", allRestAreas.size());
+
+            // 동해고속도로 휴게소만 필터링
+            List<Map<String, Object>> donghaeRestAreas = allRestAreas.stream()
+                    .filter(area -> {
+                        String routeNo = String.valueOf(area.get("routeNo"));
+                        String routeName = String.valueOf(area.get("routeName"));
+                        return "65".equals(routeNo) || 
+                               routeName != null && routeName.contains("동해");
+                    })
+                    .map(this::enrichRestAreaData)
+                    .collect(Collectors.toList());
+
+            log.info("동해고속도로 휴게소 필터링 후: {}건", donghaeRestAreas.size());
+
+            return donghaeRestAreas;
+
+        } catch (Exception e) {
+            log.error("휴게소 API 조회 실패: {}", e.getMessage());
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
+    }
+
+    /* 휴게소 데이터 보강 */
+    private Map<String, Object> enrichRestAreaData(Map<String, Object> area) {
+        Map<String, Object> enriched = new LinkedHashMap<>(area);
+
+        String unitName = String.valueOf(area.get("unitName")); // 휴게소명
+        String stdDir = String.valueOf(area.get("stdDir"));     // 방향 (상행/하행)
+
+        // 시설 정보 추출
+        List<String> facilities = new ArrayList<>();
+        if ("Y".equals(area.get("convenience"))) facilities.add("편의점");
+        if ("Y".equals(area.get("restroom"))) facilities.add("화장실");
+        if ("Y".equals(area.get("restaurant"))) facilities.add("식당");
+        if ("Y".equals(area.get("gas"))) facilities.add("주유소");
+        if ("Y".equals(area.get("lpg"))) facilities.add("LPG충전소");
+        if ("Y".equals(area.get("parking"))) facilities.add("주차장");
+        if ("Y".equals(area.get("elecCharger"))) facilities.add("전기차충전소");
+
+        enriched.put("facilities", facilities);
+        enriched.put("name", unitName);
+        enriched.put("direction", stdDir);
+
+        // 구간 정보 매핑 (위치 기반 추정)
+        enriched.putAll(estimateRouteInfo(unitName, stdDir));
+
+        return enriched;
+    }
+
+    /* 휴게소 이름과 방향으로 구간 정보 추정 */
+    private Map<String, String> estimateRouteInfo(String unitName, String direction) {
+        Map<String, String> routeInfo = new HashMap<>();
+
+        // 휴게소 위치에 따른 구간 매핑
+        if (unitName.contains("임원") || unitName.contains("삼척")) {
+            if ("상행".equals(direction) || "부산".equals(direction)) {
+                routeInfo.put("fromCity", "삼척");
+                routeInfo.put("toCity", "동해");
+                routeInfo.put("timeMinutes", "15");
+            } else {
+                routeInfo.put("fromCity", "동해");
+                routeInfo.put("toCity", "삼척");
+                routeInfo.put("timeMinutes", "15");
+            }
+        } else if (unitName.contains("현북") || unitName.contains("동해")) {
+            if ("상행".equals(direction) || "부산".equals(direction)) {
+                routeInfo.put("fromCity", "동해");
+                routeInfo.put("toCity", "양양");
+                routeInfo.put("timeMinutes", "25");
+            } else {
+                routeInfo.put("fromCity", "양양");
+                routeInfo.put("toCity", "동해");
+                routeInfo.put("timeMinutes", "25");
+            }
+        } else if (unitName.contains("양양")) {
+            if ("상행".equals(direction) || "부산".equals(direction)) {
+                routeInfo.put("fromCity", "양양");
+                routeInfo.put("toCity", "속초");
+                routeInfo.put("timeMinutes", "20");
+            } else {
+                routeInfo.put("fromCity", "속초");
+                routeInfo.put("toCity", "양양");
+                routeInfo.put("timeMinutes", "20");
+            }
+        }
+
+        return routeInfo;
+    }
+
+    /*  구간별 휴게소 조회 */
+    public List<Map<String, Object>> getRestAreasByRoute(String fromCity, String toCity, String direction) {
+        List<Map<String, Object>> allRestAreas = getDonghaeRestAreas();
+
+        return allRestAreas.stream()
+                .filter(area -> {
+                    String areaFrom = (String) area.get("fromCity");
+                    String areaTo = (String) area.get("toCity");
+                    String areaDir = (String) area.get("direction");
+
+                    boolean matchesRoute = fromCity.equals(areaFrom) && toCity.equals(areaTo);
+                    boolean matchesDirection = direction.equals(areaDir) || 
+                                              ("상행".equals(direction) && "부산".equals(areaDir)) ||
+                                              ("하행".equals(direction) && "서울".equals(areaDir));
+
+                    return matchesRoute && matchesDirection;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /* API 응답 파싱 */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractRestAreas(Map response) {
+        try {
+            // 한국도로공사 API 응답 구조
+            List<Map<String, Object>> list = (List<Map<String, Object>>) response.get("list");
+            return list != null ? list : Collections.emptyList();
+        } catch (Exception e) {
+            log.warn("휴게소 응답 파싱 실패: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+}

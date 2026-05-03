@@ -1,0 +1,5 @@
+package com.trip.travel.dto;
+
+public class WeatherDto {
+
+}
