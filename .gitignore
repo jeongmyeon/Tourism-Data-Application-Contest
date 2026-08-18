@@ -1,0 +1,10 @@
+# Eclipse workspace metadata (machine/user specific, not project source)
+.metadata/
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -405,11 +405,11 @@ public class RestAreaService {
             
             String gasolinePrice = String.valueOf(station.get("gasolinePrice"));
             String dieselPrice = String.valueOf(station.get("diselPrice"));
-            String lpgPrice = String.valueOf(station.get("lpgPrice"));
+
 
             result.put("gasolinePrice", gasolinePrice.replaceAll("[^0-9]", ""));
             result.put("dieselPrice", dieselPrice.replaceAll("[^0-9]", ""));
-            result.put("lpgPrice", lpgPrice.replaceAll("[^0-9]", ""));
+ 
             result.put("lpgYn", station.get("lpgYn"));
             
             

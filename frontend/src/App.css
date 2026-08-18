@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+:root {
+  --gangwon-pine:    #2D6A4F;
+  --gangwon-sky:     #1565C0;
+  --gangwon-snow:    #E8F4F8;
+  --gangwon-earth:   #795548;
+  --gangwon-sun:     #F57F17;
+  --bg:              #F5F7FA;
+  --card-bg:         #FFFFFF;
+  --text-primary:    #1A2332;
+  --text-secondary:  #5A6678;
+  --border:          #E2E8F0;
+  --radius:          12px;
+  --shadow:          0 2px 12px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+.main-content { flex: 1; padding: 24px 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-green  { background: #E8F5E9; color: #2E7D32; }
+.badge-yellow { background: #FFF8E1; color: #F57F17; }
+.badge-red    { background: #FFEBEE; color: #C62828; }
+.badge-blue   { background: #E3F2FD; color: #1565C0; }
+
+.loading { text-align: center; padding: 40px; color: var(--text-secondary); font-size: 14px; }
+.error   { text-align: center; padding: 40px; color: #C62828; font-size: 14px; }
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+@media (max-width: 768px) {
+  .main-content { padding: 16px 12px; }
+}
