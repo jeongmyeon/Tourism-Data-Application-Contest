@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTourSearch } from '../hooks/useTravel';
 import TourDetailModal from '../components/TourDetailModal';
@@ -8,7 +8,6 @@ export default function SearchPage() {
   const navigate = useNavigate();
   const keyword = searchParams.get('q') || '';
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const festivalSectionRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () =>{

@@ -3,7 +3,7 @@ import { useFestivalDetail } from '../hooks/useTravel';
 import CardImage from './CardImage';
 
 export default function FestivalModal({ festival, onClose }) {
-    const {data : detail, isLoading } = useFestivalDetail(festival.contentid);
+    const {data : detail } = useFestivalDetail(festival.contentid);
 
   // ESC 키로 닫기
   useEffect(() => {

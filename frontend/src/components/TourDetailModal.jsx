@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useTourDetail } from '../hooks/useTravel';
-import { href } from 'react-router-dom';
 import CardImage from './CardImage';
 
 export default function TourDetailModal({ item, onClose }) {

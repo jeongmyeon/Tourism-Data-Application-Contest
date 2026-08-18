@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   useGangwonWeather, 
   useFestivals, 
@@ -21,7 +21,7 @@ export default function MainPage() {
   const { data: festivals } = useFestivals();
   const { data: eastCoastData, isLoading } = useEastCoast();
   const { data: searchResults } = useTourSearch(keyword);
-  const { data: restAreas, isLoading: restAreasLoading } = useDonghaeRestAreas();
+  const { data: restAreas } = useDonghaeRestAreas();
   const [selectedFestival, setSelectedFestival] = useState(null);
   const [selectedTourItem, setSelectedTourItem] = useState(null);
   const [festivalsToShow, setFestivalsToShow] = useState(5);

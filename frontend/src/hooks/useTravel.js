@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { tourApi, weatherApi, parkingApi, dashboardApi, restAreaApi } from '../api/client';
+import { tourApi, weatherApi, dashboardApi, restAreaApi } from '../api/client';
 
 // 날씨 
 export function useGangwonWeather() {
