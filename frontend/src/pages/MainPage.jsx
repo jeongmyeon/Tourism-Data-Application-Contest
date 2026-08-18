@@ -9,6 +9,8 @@ import {
   useRealTimeTraffic
 } from '../hooks/useTravel';
 import FestivalModal from '../components/FestivalModal';
+import TourDetailModal from '../components/TourDetailModal';
+import CardImage from '../components/CardImage';
 
 export default function MainPage() {
   const navigate = useNavigate();
@@ -21,6 +23,7 @@ export default function MainPage() {
   const { data: searchResults } = useTourSearch(keyword);
   const { data: restAreas, isLoading: restAreasLoading } = useDonghaeRestAreas();
   const [selectedFestival, setSelectedFestival] = useState(null);
+  const [selectedTourItem, setSelectedTourItem] = useState(null);
   const [festivalsToShow, setFestivalsToShow] = useState(5);
   const [prevSliderPosition, setPrevSliderPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -686,20 +689,13 @@ export default function MainPage() {
                           {currentCityData.spots && currentCityData.spots.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                               {currentCityData.spots.slice(0, 4).map((spot, i) => (
-                                <div key={i} className="card" style={{ padding: '16px' }}>
-                                  {spot.firstimage && (
-                                    <img
-                                      src={spot.firstimage}
-                                      alt={spot.title}
-                                      style={{
-                                        width: '100%',
-                                        height: '120px',
-                                        objectFit: 'cover',
-                                        borderRadius: '8px',
-                                        marginBottom: '8px'
-                                      }}
-                                    />
-                                  )}
+                                <div
+                                  key={i}
+                                  className="card"
+                                  style={{ padding: '16px', cursor: 'pointer' }}
+                                  onClick={() => setSelectedTourItem(spot)}
+                                >
+                                  <CardImage src={spot.firstimage} alt={spot.title} height="120px" />
                                   <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>
                                     {spot.title}
                                   </div>
@@ -728,20 +724,13 @@ export default function MainPage() {
                           {currentCityData.festivals && currentCityData.festivals.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                               {currentCityData.festivals.slice(0, 4).map((festival, i) => (
-                                <div key={i} className="card" style={{ padding: '16px' }}>
-                                  {festival.firstimage && (
-                                    <img
-                                      src={festival.firstimage}
-                                      alt={festival.title}
-                                      style={{
-                                        width: '100%',
-                                        height: '120px',
-                                        objectFit: 'cover',
-                                        borderRadius: '8px',
-                                        marginBottom: '8px'
-                                      }}
-                                    />
-                                  )}
+                                <div
+                                  key={i}
+                                  className="card"
+                                  style={{ padding: '16px', cursor: 'pointer' }}
+                                  onClick={() => setSelectedFestival(festival)}
+                                >
+                                  <CardImage src={festival.firstimage} alt={festival.title} height="120px" />
                                   <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>
                                     {festival.title}
                                   </div>
@@ -770,20 +759,13 @@ export default function MainPage() {
                           {currentCityData.restaurants && currentCityData.restaurants.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                               {currentCityData.restaurants.slice(0, 4).map((restaurant, i) => (
-                                <div key={i} className="card" style={{ padding: '16px' }}>
-                                  {restaurant.firstimage && (
-                                    <img
-                                      src={restaurant.firstimage}
-                                      alt={restaurant.title}
-                                      style={{
-                                        width: '100%',
-                                        height: '120px',
-                                        objectFit: 'cover',
-                                        borderRadius: '8px',
-                                        marginBottom: '8px'
-                                      }}
-                                    />
-                                  )}
+                                <div
+                                  key={i}
+                                  className="card"
+                                  style={{ padding: '16px', cursor: 'pointer' }}
+                                  onClick={() => setSelectedTourItem(restaurant)}
+                                >
+                                  <CardImage src={restaurant.firstimage} alt={restaurant.title} height="120px" />
                                   <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>
                                     {restaurant.title}
                                   </div>
@@ -812,20 +794,13 @@ export default function MainPage() {
                           {currentCityData.hotels && currentCityData.hotels.length > 0 ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                               {currentCityData.hotels.slice(0, 4).map((hotel, i) => (
-                                <div key={i} className="card" style={{ padding: '16px' }}>
-                                  {hotel.firstimage && (
-                                    <img
-                                      src={hotel.firstimage}
-                                      alt={hotel.title}
-                                      style={{
-                                        width: '100%',
-                                        height: '120px',
-                                        objectFit: 'cover',
-                                        borderRadius: '8px',
-                                        marginBottom: '8px'
-                                      }}
-                                    />
-                                  )}
+                                <div
+                                  key={i}
+                                  className="card"
+                                  style={{ padding: '16px', cursor: 'pointer' }}
+                                  onClick={() => setSelectedTourItem(hotel)}
+                                >
+                                  <CardImage src={hotel.firstimage} alt={hotel.title} height="120px" />
                                   <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>
                                     {hotel.title}
                                   </div>
@@ -876,19 +851,7 @@ export default function MainPage() {
                     className="card festival-card"
                     onClick={() => setSelectedFestival(festival)}
                     style={{cursor: 'pointer'}}>
-                    {festival.firstimage && (
-                      <img
-                        src={festival.firstimage}
-                        alt={festival.title}
-                        style={{
-                          width: '100%',
-                          height: '160px',
-                          objectFit: 'cover',
-                          borderRadius: '8px',
-                          marginBottom: '12px'
-                        }}
-                      />
-                    )}
+                    <CardImage src={festival.firstimage} alt={festival.title} height="160px" marginBottom="12px" />
                     <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>
                       {festival.title}
                     </h3>
@@ -982,6 +945,12 @@ export default function MainPage() {
         <FestivalModal
           festival={selectedFestival}
           onClose={() => setSelectedFestival(null)}
+        />
+      )}
+      {selectedTourItem && (
+        <TourDetailModal
+          item={selectedTourItem}
+          onClose={() => setSelectedTourItem(null)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useFestivalDetail } from '../hooks/useTravel';
+import CardImage from './CardImage';
 
 export default function FestivalModal({ festival, onClose }) {
     const {data : detail, isLoading } = useFestivalDetail(festival.contentid);
@@ -130,18 +131,13 @@ export default function FestivalModal({ festival, onClose }) {
 
         <div>
           {/* 대표 이미지 */}
-          {festival.firstimage && (
-            <img
-              src={festival.firstimage}
-              alt={festival.title}
-              style={{
-                width: '100%',
-                height: '300px',
-                objectFit: 'cover',
-                borderRadius: '16px 16px 0 0',
-              }}
-            />
-          )}
+          <CardImage
+            src={festival.firstimage}
+            alt={festival.title}
+            height="300px"
+            radius="16px 16px 0 0"
+            marginBottom="0"
+          />
 
           <div style={{ padding: '32px' }}>
             {/* 제목 */}

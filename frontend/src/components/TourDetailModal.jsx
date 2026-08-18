@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTourDetail } from '../hooks/useTravel';
 import { href } from 'react-router-dom';
+import CardImage from './CardImage';
 
 export default function TourDetailModal({ item, onClose }) {
   const { data: detail, isLoading } = useTourDetail(item.contentid, item.contenttypeid);
@@ -281,16 +282,13 @@ export default function TourDetailModal({ item, onClose }) {
                     </div>
                 ) : (
                     <div>
-                        {item.firstimage && (
-                            <img src={item.firstimage}
-                                alt={item.title}
-                                style={{
-                                    width: '100%',
-                                    height: '300px',
-                                    objectFit: 'cover',
-                                    borderRadius: '16px 16px 0 0',
-                                }}/>
-                        )}
+                        <CardImage
+                            src={item.firstimage}
+                            alt={item.title}
+                            height="300px"
+                            radius="16px 16px 0 0"
+                            marginBottom="0"
+                        />
                         <div style={{padding: '32px'}}>
                             <h2 style={{fontSize: '28px', fontWeight: 700, marginBottom: '16px'}}>
                                 {item.title}
