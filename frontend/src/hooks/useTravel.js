@@ -81,7 +81,8 @@ export function useDonghaeRestAreas(){
   return useQuery({
     queryKey: ['donghaeRestAreas'],
     queryFn: restAreaApi.getDonghae,
-    staleTime : 24 * 60 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000,
   })
 }
 
