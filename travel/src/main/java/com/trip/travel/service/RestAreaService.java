@@ -78,7 +78,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(8));
+                    .block(Duration.ofSeconds(15));
 
             List<Map<String, Object>> list = extractList(response);
 
@@ -107,7 +107,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(8));
+                    .block(Duration.ofSeconds(15));
             
             List<Map<String, Object>> list = extractList(response);
             
@@ -149,7 +149,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(8));
+                    .block(Duration.ofSeconds(15));
             
             log.info("API 응답: {}", response);
             
@@ -391,7 +391,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(8));
+                    .block(Duration.ofSeconds(15));
             
             List<Map<String, Object>> list = extractList(response);
             
