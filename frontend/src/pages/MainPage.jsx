@@ -84,7 +84,8 @@ export default function MainPage() {
   const {currentCity, currentRestArea} = useMemo(() => {
     const cityCount = cities.length;
     if(!restAreas || restAreas.length === 0){
-      const cityIndex = Math.floor(sliderPosition / 100) * cityCount;
+      const segmentPercent = 100 / (cityCount - 1);
+      const cityIndex = Math.round(sliderPosition / segmentPercent);
       const clampedIndex = Math.min(cityIndex, cityCount -1);
       return { currentCity: cities[clampedIndex], currentRestArea: null};
     }

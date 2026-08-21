@@ -3,6 +3,7 @@ package com.trip.travel.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -24,7 +25,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public WebClient.Builder webClientBuilder() {
-        return WebClient.builder();
+        // data.ex.co.kr(도로공사) 등 일부 공공 API가 User-Agent 없는 요청을 차단(400 Blocked)하므로 기본값 지정
+        return WebClient.builder()
+                .defaultHeader(HttpHeaders.USER_AGENT,
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
     }
     
     @Bean
