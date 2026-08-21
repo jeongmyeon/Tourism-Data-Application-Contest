@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -77,7 +78,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block();
+                    .block(Duration.ofSeconds(8));
 
             List<Map<String, Object>> list = extractList(response);
 
@@ -106,7 +107,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block();
+                    .block(Duration.ofSeconds(8));
             
             List<Map<String, Object>> list = extractList(response);
             
@@ -148,7 +149,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block();
+                    .block(Duration.ofSeconds(8));
             
             log.info("API 응답: {}", response);
             
@@ -390,7 +391,7 @@ public class RestAreaService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block();
+                    .block(Duration.ofSeconds(8));
             
             List<Map<String, Object>> list = extractList(response);
             
