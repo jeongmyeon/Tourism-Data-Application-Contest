@@ -84,10 +84,11 @@ public class RestAreaService {
             return list;
 
         } catch (Exception e) {
+            log.error("❌ 휴게소 기본정보 조회 실패: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
-    
+
     /* 좌표 API 호출 */
     private List<Map<String, Object>> getRestAreaCoordinates(){
         String url = UriComponentsBuilder
@@ -110,8 +111,9 @@ public class RestAreaService {
             List<Map<String, Object>> list = extractList(response);
             
             return list;
-            
+
         }catch(Exception e) {
+            log.error("❌ 휴게소 좌표 조회 실패: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
