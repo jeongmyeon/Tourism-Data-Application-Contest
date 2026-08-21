@@ -34,7 +34,8 @@ public class RestAreaService {
         "속초", "640"    // 속초IC
     );
 
-    /* 동해고속도로 휴게소 전체 정보 조회 */
+    /* 동해고속도로 휴게소 전체 정보 조회 (실패 시 캐싱 안 함 -> 다음 요청에서 재시도) */
+    @Cacheable(value = "donghaeRestAreas", unless = "#result == null || #result.isEmpty()", sync = true)
     public List<Map<String, Object>> getDonghaeRestAreas() {
         // 1. 기본정보 조회
         List<Map<String, Object>> basicInfo = getBasicRestAreaInfo();
