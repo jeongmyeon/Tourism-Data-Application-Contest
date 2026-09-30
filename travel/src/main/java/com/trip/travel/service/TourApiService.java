@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -74,6 +75,44 @@ public class TourApiService {
             
         } catch (Exception e) {
             log.error("TourAPI 조회 실패 (contentTypeId: {}): {}", contentTypeId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // 좌표 기반 주변 관광지/맛집 조회 (휴게소 근처 추천용, 거리순 정렬)
+    public List<Map<String, Object>> getNearbyTourSpots(String mapX, String mapY, int radiusMeters) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl + "/locationBasedList2")
+                .queryParam("serviceKey", tourApiKey)
+                .queryParam("numOfRows", 15)
+                .queryParam("pageNo", 1)
+                .queryParam("MobileOS", "ETC")
+                .queryParam("MobileApp", "GangwonTravel")
+                .queryParam("mapX", mapX)
+                .queryParam("mapY", mapY)
+                .queryParam("radius", radiusMeters)
+                .queryParam("arrange", "E")
+                .queryParam("_type", "json")
+                .build(false)
+                .toUriString();
+
+        try {
+            Map response = webClientBuilder.build()
+                    .get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block(Duration.ofSeconds(8));
+
+            List<Map<String, Object>> items = extractItems(response);
+
+            // 관광지(12), 문화시설(14), 음식점(39)만 추천 대상으로
+            List<String> allowedTypes = List.of("12", "14", "39");
+            return items.stream()
+                    .filter(item -> allowedTypes.contains(String.valueOf(item.get("contenttypeid"))))
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("❌ 주변 관광지 조회 실패 (mapX:{}, mapY:{}): {}", mapX, mapY, e.getMessage());
             return Collections.emptyList();
         }
     }

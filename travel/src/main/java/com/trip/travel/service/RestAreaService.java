@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 public class RestAreaService {
 
     private final WebClient.Builder webClientBuilder;
+    private final TourApiService tourApiService;
 
     @Value("${api.restarea.key}")
     private String restAreaApiKey;
@@ -57,7 +58,23 @@ public class RestAreaService {
         		restArea.put("gasStation", gasPrice);
         	}
         }
-        
+
+        // 5. 주변 추천 관광지 (실제 휴게소만, 주유소 단독 시설은 제외)
+        for (Map<String, Object> restArea : mergedList) {
+            String gsstClssNm = String.valueOf(restArea.get("svarGsstClssNm"));
+            Object coordX = restArea.get("coordX");
+            Object coordY = restArea.get("coordY");
+            if (!"휴게소".equals(gsstClssNm) || coordX == null || coordY == null) {
+                continue;
+            }
+
+            List<Map<String, Object>> nearby = tourApiService.getNearbyTourSpots(
+                    String.valueOf(coordX), String.valueOf(coordY), 5000);
+
+            List<Map<String, Object>> top3 = nearby.stream().limit(3).collect(Collectors.toList());
+            restArea.put("nearbySpots", top3);
+        }
+
         return mergedList;
     }
 

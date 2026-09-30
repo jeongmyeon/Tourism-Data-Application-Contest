@@ -565,6 +565,50 @@ export default function MainPage() {
                       </div>
                     )}
 
+                    {/* 근처 가볼만한 곳 */}
+                    {currentRestArea.nearbySpots && currentRestArea.nearbySpots.length > 0 && (
+                      <div style={{
+                        background: '#fff',
+                        border: '2px solid #8D6E63',
+                        borderRadius: '8px',
+                        padding: '12px',
+                      }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#5D4037', marginBottom: '8px' }}>
+                          🗺️ 근처 가볼만한 곳
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {currentRestArea.nearbySpots.map((spot, i) => (
+                            <div
+                              key={i}
+                              onClick={() => setSelectedTourItem(spot)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                cursor: 'pointer',
+                                padding: '6px',
+                                borderRadius: '6px',
+                                background: '#FAFAFA',
+                              }}
+                            >
+                              <div style={{ width: '48px', height: '48px', flexShrink: 0 }}>
+                                <CardImage src={spot.firstimage} alt={spot.title} height="48px" radius="6px" marginBottom="0" />
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {spot.title}
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>
+                                  {spot.dist ? `${(parseFloat(spot.dist) / 1000).toFixed(1)}km` : ''}
+                                  {spot.contenttypeid === '39' ? ' · 맛집' : ' · 관광지'}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                 </div>
               )}
 
